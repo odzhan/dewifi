@@ -36,13 +36,13 @@
 #include <Shlobj.h>
 #include <tlhelp32.h>
 #include <msxml2.h>
-#include <atlbase.h>
 
 #include <string>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
 
+#pragma comment (lib, "advapi32.lib")
 #pragma comment (lib, "crypt32.lib")
 #pragma comment (lib, "shlwapi.lib")
 #pragma comment (lib, "Shell32.lib")
@@ -252,15 +252,15 @@ void DecryptKey(std::wstring key) {
  *
  */
 std::wstring get_text(
-  CComPtr<IXMLDOMDocument2> pDoc, 
+  IXMLDOMDocument2 *pDoc, 
   PWCHAR pt, 
   PWCHAR subNode) 
 {
   std::wstring         text = L"";
-  CComPtr<IXMLDOMNode> pNode = NULL;
+  IXMLDOMNode          *pNode = NULL;
   HRESULT              hr;
-  CComBSTR             bstrText;
-  CComPtr<IXMLDOMNode> pChild = NULL;
+  BSTR                 bstrText;
+  IXMLDOMNode          *pChild = NULL;
   std::wstring         nodeString = pt;
   
   nodeString += subNode;
@@ -283,16 +283,16 @@ std::wstring get_text(
 #define WLAN_NS   L"xmlns:s=\"http://www.microsoft.com/networking/WLAN/profile/v1\""
 #define WLANAP_NS L"xmlns:s=\"http://www.microsoft.com/networking/WLANAP/profile/v1\""
 
-void profile_properties(CComPtr<IXMLDOMDocument2> pDoc, DWORD idx)
+void profile_properties(IXMLDOMDocument2 *pDoc, DWORD idx)
 {
   PWCHAR       xml[2]={WLAN_NS, WLANAP_NS};
   PWCHAR       profiles[2]={L"WLANProfile", L"WLANAPProfile"};
   HRESULT      hr;
-  CComVariant  ns;
+  VARIANT      ns;
   PWCHAR       pt;
   std::wstring ssid, auth, enc, key;
   
-  ns = xml[idx];
+  V_BSTR(&ns) = xml[idx];
   pt = profiles[idx];
   hr = pDoc->setProperty(BSTR(L"SelectionNamespaces"), ns);
 
@@ -312,7 +312,6 @@ void profile_properties(CComPtr<IXMLDOMDocument2> pDoc, DWORD idx)
   } else {
     wprintf(L"\n  IXMLDOMDocument2->setProperty() failed : %08x", hr);
   }
-  ns = NULL;
 }
     
 /**
@@ -328,8 +327,9 @@ void DumpWLANProfile(
   wchar_t                   path[MAX_PATH];
   wchar_t                   programData[MAX_PATH];
   HRESULT                   hr;
-  CComPtr<IXMLDOMDocument2> pDoc;
+  IXMLDOMDocument2          *pDoc;
   VARIANT_BOOL              bIsSuccessful;
+  VARIANT                   vpath;
   
   SHGetFolderPath(NULL, CSIDL_COMMON_APPDATA, 
       NULL, SHGFP_TYPE_CURRENT, programData);
@@ -348,8 +348,9 @@ void DumpWLANProfile(
       NULL, CLSCTX_INPROC_SERVER,
       IID_IXMLDOMDocument2, (void**)&pDoc);
       
-  if (SUCCEEDED(hr)) {    
-    hr = pDoc->load(CComVariant(path), &bIsSuccessful);
+  if (SUCCEEDED(hr)) {
+    V_BSTR(&vpath) = path;
+    hr = pDoc->load(vpath, &bIsSuccessful);
     
     if (SUCCEEDED(hr) && bIsSuccessful)
     {
