@@ -349,7 +349,7 @@ void DumpWLANProfile(
       IID_IXMLDOMDocument2, (void**)&pDoc);
       
   if (SUCCEEDED(hr)) {
-    V_BSTR(&vpath) = path;
+    V_BSTR(&vpath) = SysAllocString(path);
     hr = pDoc->load(vpath, &bIsSuccessful);
     
     if (SUCCEEDED(hr) && bIsSuccessful)
