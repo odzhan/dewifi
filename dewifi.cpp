@@ -57,19 +57,19 @@
  *
  */
 BOOL isElevated(VOID) {
-  HANDLE          hToken;
-  BOOL            bResult = FALSE;
-  TOKEN_ELEVATION te;
-  DWORD           dwSize;
-    
-  if (OpenProcessToken(GetCurrentProcess(), TOKEN_QUERY, &hToken)) {
-    if (GetTokenInformation(hToken, TokenElevation, &te, 
-        sizeof(TOKEN_ELEVATION), &dwSize)) {
-      bResult = te.TokenIsElevated != 0;
+    HANDLE          hToken;
+    BOOL            bResult = FALSE;
+    TOKEN_ELEVATION te;
+    DWORD           dwSize;
+      
+    if (OpenProcessToken(GetCurrentProcess(), TOKEN_QUERY, &hToken)) {
+      if (GetTokenInformation(hToken, TokenElevation, &te, 
+          sizeof(TOKEN_ELEVATION), &dwSize)) {
+        bResult = te.TokenIsElevated != 0;
+      }
+      CloseHandle(hToken);
     }
-    CloseHandle(hToken);
-  }
-  return bResult;
+    return bResult;
 }
 
 /**
@@ -79,26 +79,27 @@ BOOL isElevated(VOID) {
  *
  */
 BOOL SetPrivilege(wchar_t szPrivilege[], BOOL bEnable) {
-  HANDLE           hToken;
-  BOOL             bResult;
-  LUID             luid;
-  TOKEN_PRIVILEGES tp;
-  
-  bResult = OpenProcessToken(GetCurrentProcess(), 
-    TOKEN_ADJUST_PRIVILEGES, &hToken);
-  
-  if (bResult) {    
-    bResult = LookupPrivilegeValue(NULL, szPrivilege, &luid);
-    if (bResult) {
-      tp.PrivilegeCount           = 1;
-      tp.Privileges[0].Luid       = luid;
-      tp.Privileges[0].Attributes = (bEnable) ? SE_PRIVILEGE_ENABLED : 0;
+    HANDLE           hToken;
+    BOOL             bResult;
+    LUID             luid;
+    TOKEN_PRIVILEGES tp;
+    
+    bResult = OpenProcessToken(GetCurrentProcess(), 
+      TOKEN_ADJUST_PRIVILEGES, &hToken);
+    
+    if (bResult) {    
+      bResult = LookupPrivilegeValue(NULL, szPrivilege, &luid);
+      if (bResult) {
+        tp.PrivilegeCount           = 1;
+        tp.Privileges[0].Luid       = luid;
+        tp.Privileges[0].Attributes = (bEnable) ? SE_PRIVILEGE_ENABLED : 0;
 
-      bResult = AdjustTokenPrivileges(hToken, FALSE, &tp, 0, NULL, NULL);
+        AdjustTokenPrivileges(hToken, FALSE, &tp, 0, NULL, NULL);
+        bResult = GetLastError() == ERROR_SUCCESS;
+      }
+      CloseHandle(hToken);
     }
-    CloseHandle(hToken);
-  }
-  return bResult;
+    return bResult;
 }
 
 /**F*****************************************************************/
@@ -112,25 +113,25 @@ void xstrerror (wchar_t *fmt, ...)
  *
  *F*/
 {
-  wchar_t *error=NULL;
-  va_list arglist;
-  wchar_t buffer[2048];
-  DWORD   dwError=GetLastError();
-  
-  va_start (arglist, fmt);
-  wvnsprintf (buffer, 2048, fmt, arglist);
-  va_end (arglist);
-  
-  if (FormatMessage (
-      FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM,
-      NULL, dwError, MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT), 
-      (LPWSTR)&error, 0, NULL))
-  {
-    wprintf (L"[ %s : %s\n", buffer, error);
-    LocalFree (error);
-  } else {
-    wprintf (L"[ %s : %i\n", buffer, dwError);
-  }
+    wchar_t *error=NULL;
+    va_list arglist;
+    wchar_t buffer[2048];
+    DWORD   dwError=GetLastError();
+    
+    va_start (arglist, fmt);
+    wvnsprintf (buffer, 2048, fmt, arglist);
+    va_end (arglist);
+    
+    if (FormatMessage (
+        FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM,
+        NULL, dwError, MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT), 
+        (LPWSTR)&error, 0, NULL))
+    {
+      wprintf (L"[ %s : %s\n", buffer, error);
+      LocalFree (error);
+    } else {
+      wprintf (L"[ %s : %i\n", buffer, dwError);
+    }
 }
 
 /**
@@ -141,64 +142,64 @@ void xstrerror (wchar_t *fmt, ...)
  *
  */
 DWORD GetProcessId(wchar_t szName[]) {
-  DWORD          dwId = 0;
-  HANDLE         hSnap;
-  BOOL           bResult;
-  PROCESSENTRY32 pe32;
-  
-  hSnap = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
-  
-  if (hSnap != INVALID_HANDLE_VALUE) {
-    pe32.dwSize = sizeof(PROCESSENTRY32);
+    DWORD          dwId = 0;
+    HANDLE         hSnap;
+    BOOL           bResult;
+    PROCESSENTRY32 pe32;
     
-    bResult = Process32First(hSnap, &pe32);
-    while (bResult) {
-      if (lstrcmpi(pe32.szExeFile, szName) == 0) {
-        dwId = pe32.th32ProcessID;
-        break;
+    hSnap = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
+    
+    if (hSnap != INVALID_HANDLE_VALUE) {
+      pe32.dwSize = sizeof(PROCESSENTRY32);
+      
+      bResult = Process32First(hSnap, &pe32);
+      while (bResult) {
+        if (lstrcmpi(pe32.szExeFile, szName) == 0) {
+          dwId = pe32.th32ProcessID;
+          break;
+        }
+        bResult = Process32Next(hSnap, &pe32);
       }
-      bResult = Process32Next(hSnap, &pe32);
+      CloseHandle(hSnap);
     }
-    CloseHandle(hSnap);
-  }
-  return dwId;
+    return dwId;
 }
 
 BOOL ImpersonateSystem(VOID) {
-  BOOL   bImpersonating = FALSE;
-  HANDLE hToken, hProcess;
-  // get id of a LocalSystem process
-  DWORD  dwId = GetProcessId(L"lsass.exe");
-  
-  if (dwId != 0) {
-    // enable debug privilege
-    if (SetPrivilege(SE_DEBUG_NAME, TRUE)) {
-      // attempt to open process
-      hProcess = OpenProcess(PROCESS_QUERY_INFORMATION, FALSE, dwId);
-      if (hProcess != NULL) {
-        // attempt to open process token
-        if (OpenProcessToken(hProcess, 
-            TOKEN_IMPERSONATE | TOKEN_DUPLICATE | TOKEN_QUERY, &hToken)) {
-          // attempt to impersonate LocalSystem
-          bImpersonating = ImpersonateLoggedOnUser(hToken);
-          if (!bImpersonating) {
-            xstrerror(L"ImpersonateLoggedOnUser");
+    BOOL   bImpersonating = FALSE;
+    HANDLE hToken, hProcess;
+    // get id of a LocalSystem process
+    DWORD  dwId = GetProcessId(L"lsass.exe");
+    
+    if (dwId != 0) {
+      // enable debug privilege
+      if (SetPrivilege(SE_DEBUG_NAME, TRUE)) {
+        // attempt to open process
+        hProcess = OpenProcess(PROCESS_QUERY_INFORMATION, FALSE, dwId);
+        if (hProcess != NULL) {
+          // attempt to open process token
+          if (OpenProcessToken(hProcess, 
+              TOKEN_IMPERSONATE | TOKEN_DUPLICATE | TOKEN_QUERY, &hToken)) {
+            // attempt to impersonate LocalSystem
+            bImpersonating = ImpersonateLoggedOnUser(hToken);
+            if (!bImpersonating) {
+              xstrerror(L"ImpersonateLoggedOnUser");
+            }
+            CloseHandle(hToken);
+          } else {
+            xstrerror(L"OpenProcessToken");
           }
-          CloseHandle(hToken);
+          CloseHandle(hProcess);
         } else {
-          xstrerror(L"OpenProcessToken");
+          xstrerror(L"OpenProcess(\"lsass.exe\")");
         }
-        CloseHandle(hProcess);
       } else {
-        xstrerror(L"OpenProcess(\"lsass.exe\")");
+        xstrerror(L"SetPrivilege(SE_DEBUG_NAME, TRUE)");
       }
     } else {
-      xstrerror(L"SetPrivilege(SE_DEBUG_NAME, TRUE)");
+      xstrerror(L"GetProcessId(\"lsass.exe\")");
     }
-  } else {
-    xstrerror(L"GetProcessId(\"lsass.exe\")");
-  }
-  return bImpersonating;
+    return bImpersonating;
 }
     
 /**
@@ -209,41 +210,41 @@ BOOL ImpersonateSystem(VOID) {
  *  
  */
 void DecryptKey(std::wstring key) {
-  static bool bImpersonating = false;
-  BYTE        byteKey[2048];
-  DWORD       dwLength = 2048;
-  DATA_BLOB   in, out;
-  char        buffer[1024] = {0};
-    
-  // if not impersonating LocalSystem
-  if (!bImpersonating) {
-    bImpersonating = ImpersonateSystem();
-  }
-
-  if (bImpersonating) {
-    if (CryptStringToBinary(key.c_str(), key.length(), 
-        CRYPT_STRING_HEX, byteKey, &dwLength, 0, 0)) {
-        
-      in.pbData = byteKey;
-      in.cbData = dwLength;
+    static bool bImpersonating = false;
+    BYTE        byteKey[2048];
+    DWORD       dwLength = 2048;
+    DATA_BLOB   in, out;
+    char        buffer[1024] = {0};
       
-      if (CryptUnprotectData(&in, NULL, NULL, 
-          NULL, NULL, 0, &out)) 
-      {
-        if (out.cbData != 0) {        
-          memcpy(buffer, out.pbData, out.cbData);
-          printf("  %-64s  ", buffer);
+    // if not impersonating LocalSystem
+    if (!bImpersonating) {
+      bImpersonating = ImpersonateSystem();
+    }
+
+    if (bImpersonating) {
+      if (CryptStringToBinary(key.c_str(), key.length(), 
+          CRYPT_STRING_HEX, byteKey, &dwLength, 0, 0)) {
           
-          for (int i = 0; i < out.cbData; i++) {
-            wprintf(L"%02x", out.pbData[i]);
-          }
-          LocalFree(out.pbData);
-        } else xstrerror(L"CryptUnprotectData");
-      } else {
-        xstrerror(L"CryptUnprotectData()");
-      }
-    } else xstrerror(L"CryptStringToBinary"); 
-  }
+        in.pbData = byteKey;
+        in.cbData = dwLength;
+        
+        if (CryptUnprotectData(&in, NULL, NULL, 
+            NULL, NULL, 0, &out)) 
+        {
+          if (out.cbData != 0) {        
+            memcpy(buffer, out.pbData, out.cbData);
+            printf("  %-64s  ", buffer);
+            
+            for (int i = 0; i < out.cbData; i++) {
+              wprintf(L"%02x", out.pbData[i]);
+            }
+            LocalFree(out.pbData);
+          } else xstrerror(L"CryptUnprotectData");
+        } else {
+          xstrerror(L"CryptUnprotectData()");
+        }
+      } else xstrerror(L"CryptStringToBinary"); 
+    }
 }
 
 /**
@@ -256,27 +257,27 @@ std::wstring get_text(
   PWCHAR pt, 
   PWCHAR subNode) 
 {
-  std::wstring         text = L"";
-  IXMLDOMNode          *pNode = NULL;
-  HRESULT              hr;
-  BSTR                 bstrText;
-  IXMLDOMNode          *pChild = NULL;
-  std::wstring         nodeString = pt;
-  
-  nodeString += subNode;
-  
-  hr = pDoc->selectSingleNode(BSTR(nodeString.c_str()), &pNode);
-  
-  if (SUCCEEDED(hr) && pNode != NULL) {    
-    hr = pNode->get_firstChild(&pChild);
-    if (SUCCEEDED(hr) && pChild != NULL) {      
-      hr = pChild->get_text(&bstrText);
-      if (SUCCEEDED(hr)) {
-        text = bstrText;
+    std::wstring         text = L"";
+    IXMLDOMNode          *pNode = NULL;
+    HRESULT              hr;
+    BSTR                 bstrText;
+    IXMLDOMNode          *pChild = NULL;
+    std::wstring         nodeString = pt;
+    
+    nodeString += subNode;
+    
+    hr = pDoc->selectSingleNode(BSTR(nodeString.c_str()), &pNode);
+    
+    if (SUCCEEDED(hr) && pNode != NULL) {    
+      hr = pNode->get_firstChild(&pChild);
+      if (SUCCEEDED(hr) && pChild != NULL) {      
+        hr = pChild->get_text(&bstrText);
+        if (SUCCEEDED(hr)) {
+          text = bstrText;
+        } 
       } 
     } 
-  } 
-  return text;
+    return text;
 }
 
 // required to parse WLAN profiles
@@ -285,33 +286,34 @@ std::wstring get_text(
 
 void profile_properties(IXMLDOMDocument2 *pDoc, DWORD idx)
 {
-  PWCHAR       xml[2]={WLAN_NS, WLANAP_NS};
-  PWCHAR       profiles[2]={L"WLANProfile", L"WLANAPProfile"};
-  HRESULT      hr;
-  VARIANT      ns;
-  PWCHAR       pt;
-  std::wstring ssid, auth, enc, key;
-  
-  V_BSTR(&ns) = xml[idx];
-  pt = profiles[idx];
-  hr = pDoc->setProperty(BSTR(L"SelectionNamespaces"), ns);
+    PWCHAR       xml[2]={WLAN_NS, WLANAP_NS};
+    PWCHAR       profiles[2]={L"WLANProfile", L"WLANAPProfile"};
+    HRESULT      hr;
+    VARIANT      ns;
+    PWCHAR       pt;
+    std::wstring ssid, auth, enc, key;
+    
+    V_VT(&ns) = VT_BSTR;
+    V_BSTR(&ns) = SysAllocString(xml[idx]);
+    pt = profiles[idx];
+    hr = pDoc->setProperty(BSTR(L"SelectionNamespaces"), ns);
 
-  if (SUCCEEDED(hr)) {    
-    ssid = get_text(pDoc, pt, L"/s:SSIDConfig/s:SSID/s:name");
-    auth = get_text(pDoc, pt, L"/s:MSM/s:security/s:authEncryption/s:authentication");
-    enc  = get_text(pDoc, pt, L"/s:MSM/s:security/s:authEncryption/s:encryption");
-    key  = get_text(pDoc, pt, L"/s:MSM/s:security/s:sharedKey/s:keyMaterial");
-    
-    if (!ssid.empty()) {
-      wprintf(L"\n  %-20s  %-10s  %-20s", ssid.c_str(), auth.c_str(), enc.c_str());
-    
-      if (!key.empty()) {
-        DecryptKey(key);
+    if (SUCCEEDED(hr)) {    
+      ssid = get_text(pDoc, pt, L"/s:SSIDConfig/s:SSID/s:name");
+      auth = get_text(pDoc, pt, L"/s:MSM/s:security/s:authEncryption/s:authentication");
+      enc  = get_text(pDoc, pt, L"/s:MSM/s:security/s:authEncryption/s:encryption");
+      key  = get_text(pDoc, pt, L"/s:MSM/s:security/s:sharedKey/s:keyMaterial");
+      
+      if (!ssid.empty()) {
+        wprintf(L"\n  %-20s  %-10s  %-20s", ssid.c_str(), auth.c_str(), enc.c_str());
+      
+        if (!key.empty()) {
+          DecryptKey(key);
+        }
       }
+    } else {
+      wprintf(L"\n  IXMLDOMDocument2->setProperty() failed : %08x", hr);
     }
-  } else {
-    wprintf(L"\n  IXMLDOMDocument2->setProperty() failed : %08x", hr);
-  }
 }
     
 /**
@@ -324,46 +326,49 @@ void DumpWLANProfile(
   wchar_t adapterGuid[], 
   wchar_t profileGuid[]) 
 {
-  wchar_t                   path[MAX_PATH];
-  wchar_t                   programData[MAX_PATH];
-  HRESULT                   hr;
-  IXMLDOMDocument2          *pDoc;
-  VARIANT_BOOL              bIsSuccessful;
-  VARIANT                   vpath;
-  
-  SHGetFolderPath(NULL, CSIDL_COMMON_APPDATA, 
-      NULL, SHGFP_TYPE_CURRENT, programData);
-      
-  _snwprintf(path, MAX_PATH, 
-    L"%s\\Microsoft\\Wlansvc\\Profiles\\Interfaces\\%s\\%s.xml", 
-    programData, adapterGuid, profileGuid);
-
-  hr = CoInitialize(NULL);
-  if (FAILED(hr)) {
-    wprintf(L"\nCoInitialize() failed : %08x", hr);
-    return;
-  }  
-  
-  hr = CoCreateInstance(CLSID_DOMDocument30, 
-      NULL, CLSCTX_INPROC_SERVER,
-      IID_IXMLDOMDocument2, (void**)&pDoc);
-      
-  if (SUCCEEDED(hr)) {
-    V_BSTR(&vpath) = SysAllocString(path);
-    hr = pDoc->load(vpath, &bIsSuccessful);
+    wchar_t                   path[MAX_PATH];
+    wchar_t                   programData[MAX_PATH];
+    HRESULT                   hr;
+    IXMLDOMDocument2          *pDoc;
+    VARIANT_BOOL              bIsSuccessful;
+    VARIANT                   vpath;
     
-    if (SUCCEEDED(hr) && bIsSuccessful)
-    {
-      profile_properties(pDoc, 0);
-      profile_properties(pDoc, 1);
+    SHGetFolderPath(NULL, CSIDL_COMMON_APPDATA, 
+        NULL, SHGFP_TYPE_CURRENT, programData);
+        
+    _snwprintf(path, MAX_PATH, 
+      L"%s\\Microsoft\\Wlansvc\\Profiles\\Interfaces\\%s\\%s.xml", 
+      programData, adapterGuid, profileGuid);
+
+    hr = CoInitialize(NULL);
+    if (FAILED(hr)) {
+      wprintf(L"\nCoInitialize() failed : %08x", hr);
+      return;
+    }  
+    
+    hr = CoCreateInstance(CLSID_DOMDocument30, 
+        NULL, CLSCTX_INPROC_SERVER,
+        IID_IXMLDOMDocument2, (void**)&pDoc);
+        
+    if (SUCCEEDED(hr)) {
+      VariantInit(&vpath);
+      V_VT(&vpath) = VT_BSTR;
+      V_BSTR(&vpath) = SysAllocString(path);
+      pDoc->put_async(VARIANT_FALSE);
+      hr = pDoc->load(vpath, &bIsSuccessful);
+      
+      if (SUCCEEDED(hr) && bIsSuccessful == VARIANT_TRUE) {
+        profile_properties(pDoc, 0);
+        profile_properties(pDoc, 1);
+      } else {
+        DWORD err = GetLastError();
+        wprintf(L"\n  IXMLDOMDocument2->load(%s) failed : %08x : %i", path, hr, err);
+      }
+      pDoc = NULL;
     } else {
-      wprintf(L"\n  IXMLDOMDocument2->load() failed : %08x", hr);
+      wprintf(L"\n  CoCreateInstance() failed : %08x", hr);
     }
-    pDoc = NULL;
-  } else {
-    wprintf(L"\n  CoCreateInstance() failed : %08x", hr);
-  }
-  CoUninitialize();
+    CoUninitialize();
 }
 
 /**
@@ -372,43 +377,43 @@ void DumpWLANProfile(
  *
  */
 std::wstring GetAdapterDescription(std::wstring guid) {
-  static       DWORD dwCtrlIdx = 0;
-  LSTATUS      lStatus;
-  DWORD        cbSize;
-  std::wstring description = L"<unavailable>";
-  wchar_t      path[1024], pnpInstance[1024], deviceDesc[1024];
-  PWCHAR       pDesc;
-  
-  if (dwCtrlIdx == 0) {
-    cbSize = sizeof(DWORD);
-    lStatus = SHGetValue(HKEY_LOCAL_MACHINE, L"SYSTEM\\Select", 
-        L"Default", 0, &dwCtrlIdx, &cbSize);
-    if (lStatus != ERROR_SUCCESS) {
-      dwCtrlIdx = 1;
+    static       DWORD dwCtrlIdx = 0;
+    LSTATUS      lStatus;
+    DWORD        cbSize;
+    std::wstring description = L"<unavailable>";
+    wchar_t      path[1024], pnpInstance[1024], deviceDesc[1024];
+    PWCHAR       pDesc;
+    
+    if (dwCtrlIdx == 0) {
+      cbSize = sizeof(DWORD);
+      lStatus = SHGetValue(HKEY_LOCAL_MACHINE, L"SYSTEM\\Select", 
+          L"Default", 0, &dwCtrlIdx, &cbSize);
+      if (lStatus != ERROR_SUCCESS) {
+        dwCtrlIdx = 1;
+      }
     }
-  }
-  
-  _snwprintf(path, sizeof(path) / sizeof(wchar_t), 
-      L"SYSTEM\\ControlSet%03i\\Control\\Network\\"
-      L"{4D36E972-E325-11CE-BFC1-08002BE10318}\\%s\\Connection", 
-      dwCtrlIdx, guid.c_str());
+    
+    _snwprintf(path, sizeof(path) / sizeof(wchar_t), 
+        L"SYSTEM\\ControlSet%03i\\Control\\Network\\"
+        L"{4D36E972-E325-11CE-BFC1-08002BE10318}\\%s\\Connection", 
+        dwCtrlIdx, guid.c_str());
 
-  cbSize = sizeof(pnpInstance) / sizeof(wchar_t);
-  lStatus = SHGetValue(HKEY_LOCAL_MACHINE, path, L"PnpInstanceID", 
-      0, pnpInstance, &cbSize);
-  if (lStatus == ERROR_SUCCESS) {
-    _snwprintf(path, 1024, L"SYSTEM\\ControlSet%03i\\Enum\\%s", 
-        dwCtrlIdx, pnpInstance);
-  
-    cbSize = sizeof(deviceDesc) / sizeof(wchar_t);
-    lStatus = SHGetValue(HKEY_LOCAL_MACHINE, path, L"DeviceDesc", 
-        0, &deviceDesc, &cbSize);
-    pDesc = wcsrchr(deviceDesc, L';');
-    if (pDesc != 0) {
-      description = ++pDesc;
+    cbSize = sizeof(pnpInstance) / sizeof(wchar_t);
+    lStatus = SHGetValue(HKEY_LOCAL_MACHINE, path, L"PnpInstanceID", 
+        0, pnpInstance, &cbSize);
+    if (lStatus == ERROR_SUCCESS) {
+      _snwprintf(path, 1024, L"SYSTEM\\ControlSet%03i\\Enum\\%s", 
+          dwCtrlIdx, pnpInstance);
+    
+      cbSize = sizeof(deviceDesc) / sizeof(wchar_t);
+      lStatus = SHGetValue(HKEY_LOCAL_MACHINE, path, L"DeviceDesc", 
+          0, &deviceDesc, &cbSize);
+      pDesc = wcsrchr(deviceDesc, L';');
+      if (pDesc != 0) {
+        description = ++pDesc;
+      }
     }
-  }
-  return description;
+    return description;
 }
 
 DWORD EnumInterfaces(VOID) {
@@ -478,23 +483,23 @@ DWORD EnumInterfaces(VOID) {
 }
 
 VOID setw(SHORT X) {
-  CONSOLE_SCREEN_BUFFER_INFO csbi;
-  GetConsoleScreenBufferInfo(GetStdHandle(STD_OUTPUT_HANDLE), &csbi);
-  
-  if (X <= csbi.dwSize.X) return;
-  csbi.dwSize.X  = X;
-  SetConsoleScreenBufferSize(GetStdHandle(STD_OUTPUT_HANDLE), csbi.dwSize);  
+    CONSOLE_SCREEN_BUFFER_INFO csbi;
+    GetConsoleScreenBufferInfo(GetStdHandle(STD_OUTPUT_HANDLE), &csbi);
+    
+    if (X <= csbi.dwSize.X) return;
+    csbi.dwSize.X  = X;
+    SetConsoleScreenBufferSize(GetStdHandle(STD_OUTPUT_HANDLE), csbi.dwSize);  
 }
 
 int main(void) {
-  setw(300);
+    setw(300);
 
-  if (!isElevated()) {
-    printf("\n  WARNING: Process token requires elevation . . .\n");
-  }
-  
-  EnumInterfaces();
-  printf("\n  Press any key to continue . . .");
-  fgetc(stdin);
-  return 0;
+    if (!isElevated()) {
+      printf("\n  WARNING: Process token requires elevation . . .\n");
+    }
+    
+    EnumInterfaces();
+    printf("\n\n  Press any key to continue . . .");
+    fgetc(stdin);
+    return 0;
 }
