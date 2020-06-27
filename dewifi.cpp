@@ -428,7 +428,7 @@ DWORD EnumInterfaces(VOID) {
       KEY_ENUMERATE_SUB_KEYS | KEY_WOW64_64KEY, &hSubKey);
   
   if (dwError != ERROR_SUCCESS) {
-    xstrerror(L"RegOpenKeyEx(\"SOFTWARE\\Microsoft\\Wlansvc\\Interfaces\"");
+    wprintf(L"No WiFi interfaces found on this device.\n");
     return 0;
   }
   
